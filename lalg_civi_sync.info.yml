@@ -1,0 +1,11 @@
+name: LALG CiviCRM Sync
+type: module
+description: Synchronise Drupal Groups (etc.) to CiviCRM
+package: Custom
+core_version_requirement: ^9
+dependencies:
+  - drupal:group
+  
+version: 0.1
+
+ 

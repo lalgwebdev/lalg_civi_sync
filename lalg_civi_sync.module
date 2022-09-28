@@ -1,0 +1,56 @@
+<?php
+
+//********************************************************************
+// Skeleton for a module to Sync Froupal Groups with Civi Organisations, etc.
+//********************************************************************
+
+// *****************  Initial doodling  *************
+
+use \Drupal\Core\Entity\EntityInterface;
+use \Drupal\Group\GroupInterface;
+use \Drupal\Core\Field\FieldItemInterface;
+use \Drupal\Core\TypedData\TypedDataInterface;
+
+//use \Drupal\Core\Session\AccountInterface; 
+ 
+//********* Patterns for reading Entity Field Values  **************
+// dpm($entity->id);						// Gets a FieldItemList object (with one item)
+// dpm($entity->get('id')->getValue());		// Gets an array with one item being the value
+// dpm($entity->id->value);					// Gets the Value
+// dpm($entity->get('id')->value);			// Gets the Value
+// dpm($entity->label->value);				// Gets the Value
+// dpm($entity->label->getString());		// Another way to stringify the value
+
+    // $alias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $entity->id->value);
+// dpm('Alias: ' . $alias);
+
+
+/**
+ * Implements hook_entity_update().
+ */
+function lalg_civi_sync_entity_update(Drupal\Core\Entity\EntityInterface $entity) {
+  if ($entity->getEntityTypeId() == 'group') {
+// Call function to check Group synched properly	  
+  }
+}
+ 
+
+//********************  Not sure if this does anything useful  ************************
+
+/**
+ * Alter the links for the group_operations block.
+ *
+ * @param array $operations
+ *   A list of links to be set in an 'operations' element.
+ * @param GroupInterface $group
+ *   The group to alter the operations for.
+ *
+ * @see \Drupal\group\Plugin\Block\GroupOperationsBlock
+ * @see \Drupal\Core\Render\Element\Dropbutton
+ */
+// function lalg_wf_utils_group_operations_alter(&$operations, $group) {
+  // dpm($group->label());
+  // dpm($operations);
+  // dpm($group);
+// }
+
