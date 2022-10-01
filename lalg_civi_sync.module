@@ -24,17 +24,136 @@ use \Drupal\Core\TypedData\TypedDataInterface;
 // $alias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $entity->id->value);
 // dpm('Alias: ' . $alias);
 
+//**************  Patterns for Hooks  **********************
+/**
+ * Implements hook_entity_insert().
+ * Similarly for hook_entity_update() and hook_entity_delete()
+ */
+// function lalg_civi_sync_entity_insert(\Drupal\Core\Entity\EntityInterface $entity) {
+  // dpm('Insert: ' . $entity->getEntityTypeId());
+// }
+
+// function lalg_civi_sync_group_insert(\Drupal\Core\Entity\EntityInterface $entity) {
+// dpm('Hook Insert Group');
+// }
+ 
+// function lalg_civi_sync_group_content_insert(\Drupal\Core\Entity\EntityInterface $entity) {
+// dpm('Hook Insert Group_Content');
+// }
+
+
+/************************************************************************
+/*  PseudoCode
+/************************************************************************
+/*
+Hook Group Create ()
+  Process Action (Group, Action)
+
+Hook Group Update ()
+  Process Action (Group, Action)
+
+Hook Group Delete ()
+  Process Action (Group, Action)
+
+Hook GroupContent Create ()
+  Process Action (GroupContent, Action)
+
+Hook GroupContent Update ()					// Not sure this ever happens
+  Process Action (GroupContent, Action)
+
+Hook GroupContent Delete ()
+  Process Action (GroupContent, Action)
+  
+Process Group Action (Group, Action)
+  Get Group details - Id -> Organisation Ext Id
+  Get list of Organisations with that Ext Id 
+  If None exist
+    Check none in Trash
+      If in Trash
+        Delete Organisation()  	// Now definitely none.
+    If Create 
+	  Create Organisation()
+	If Update
+	  Create Organisation()
+	  Update Organisation()			// Probably redundent
+	If Delete
+	  Return 
+  If 1
+    If Create 
+	  Delete Organisation() 
+	  Create Organisation()
+	If Update 
+	  Update Organisation()
+	If Delete 
+	  Delete Organisation()
+  If >1
+    Throw Error 
+
+Process GroupContent Action (GroupContent, Action)	
+  Check Organisation and User exist
+  If not
+    Throw Error
+  Get matching Civi Relationship(s)
+  If None Exist
+    Check none in Trash
+      If in Trash
+        Delete Relationship()  	// Now definitely none.    
+    If Create 
+      Create Relationship()
+    If Delete 
+	  Return
+  If 1
+    If Create 
+      Delete Relationship()
+      Create Relationship()	  
+    If Delete 
+      Delete Relationship()
+  If >1
+    Throw Error 	  
+
+	
+*/
+
+/************************************************************************
+/*  Hooks for Group changes 
+/************************************************************************
+
+/**
+ * Implements hook_entity_insert().
+ */
+function lalg_civi_sync_entity_insert(\Drupal\Core\Entity\EntityInterface $entity) {
+dpm('Insert: ' . $entity->getEntityTypeId());
+}
+
 
 /**
  * Implements hook_entity_update().
  */
 function lalg_civi_sync_entity_update(Drupal\Core\Entity\EntityInterface $entity) {
+dpm('Update: ' . $entity->getEntityTypeId());	
+return;
   if ($entity->getEntityTypeId() == 'group') {
     // Call function to check Group synched properly	  
 //	check_group_entity($entity);
   }
 }
+
+/**
+ * Implements hook_entity_delete().
+ */
+ function lalg_civi_sync_entity_delete(Drupal\Core\Entity\EntityInterface $entity) {
+  dpm('Delete: ' . $entity->getEntityTypeId());	
+}
  
+
+
+ 
+ 
+/************************************************************************
+/*  Process the changes 
+/************************************************************************ 
+ 
+
 /**
  *  Checks that the linked Organisation exists, and if not creates it.
  *  Checks and corrects the Organisation's attributes.
