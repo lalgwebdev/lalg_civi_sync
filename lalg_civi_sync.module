@@ -14,14 +14,14 @@ use \Drupal\Core\TypedData\TypedDataInterface;
 //use \Drupal\Core\Session\AccountInterface; 
  
 //********* Patterns for reading Entity Field Values  **************
-// dpm($entity->id);						// Gets a FieldItemList object (with one item)
-// dpm($entity->get('id')->getValue());		// Gets an array with one item being the value
-// dpm($entity->id->value);					// Gets the Value
-// dpm($entity->get('id')->value);			// Gets the Value
-// dpm($entity->label->value);				// Gets the Value
-// dpm($entity->label->getString());		// Another way to stringify the value
+// $entity->id;							// Gets a FieldItemList object (with one item)
+// $entity->get('id')->getValue();		// Gets an array with one item being the value
+// $entity->id->value;					// Gets the Value of the Id
+// $entity->get('id')->value;			// Gets the Value of the Id
+// $entity->label->value;				// Gets the Value of the Label (Title)
+// $entity->label->getString();			// Another way to stringify the value
 
-    // $alias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $entity->id->value);
+// $alias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $entity->id->value);
 // dpm('Alias: ' . $alias);
 
 
@@ -30,9 +30,88 @@ use \Drupal\Core\TypedData\TypedDataInterface;
  */
 function lalg_civi_sync_entity_update(Drupal\Core\Entity\EntityInterface $entity) {
   if ($entity->getEntityTypeId() == 'group') {
-// Call function to check Group synched properly	  
+    // Call function to check Group synched properly	  
+//	check_group_entity($entity);
   }
 }
+ 
+/**
+ *  Checks that the linked Organisation exists, and if not creates it.
+ *  Checks and corrects the Organisation's attributes.
+ *  Checks and corrects the Relationships to Group members / Civi Contacts
+ */
+function check_group_entity($group) {
+  \Drupal::service('civicrm')->initialize();		// Prepare to use CiviCRM API
+  
+  $gid = $group->id;
+
+  // Look for corresponding Organisation
+  $orgs = civicrm_api4('Contact', 'get', [
+    'select' => [
+      'id', 
+      'organization_name',
+	  'is_deleted',
+    ],
+    'where' => [  
+      ['external_identifier', '=', $gid], 
+      ['contact_type', '=', 'Organization'],
+    ],
+  ]);  
+	
+  if (count($orgs) == 0) {
+	// Create a new Organisation Contact
+    createOrganisation($group);
+  }
+  else if (count($orgs) > 1) {
+	// Throw Error.  External Id must be unique   
+dpm('Throw error - duplicate Ext Id');	
+  }
+  else {
+	// Organisation already exists, so ...
+	// Check if in Trash
+	
+    // Now check Attributes
+dpm('Checking Attributes');  
+  }
+}
+ 
+ 
+/**
+ * Creates a new CiviCRM Organisation Contact, corresponding to the given Drupal Group Entity
+ */
+function createOrganisation($group) {
+dpm('Create Organisation');	
+  //Collect the parameters needed
+  $gid = $group->id->value;
+  $gTitle = $group->label->value;	
+  $gAlias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $gid);
+//************** Remove leading /
+  
+  // Create the Organisation
+  $results = civicrm_api4('Contact', 'create', [
+    'values' => [
+      'contact_type' => 'Organization', 
+      'external_identifier' => $gid, 
+      'organization_name' => $gTitle,
+    ],
+  ]);
+// dpm($results); 
+ 
+  $orgId = $results[0]['id'];
+dpm($orgId);
+
+  // Add the Email address
+  $results = civicrm_api4('Email', 'create', [
+    'values' => [
+      'contact_id' => $orgId, 
+      'email' => $gAlias . '@lalg.org.uk', 
+      'is_primary' => TRUE, 
+      'location_type_id:name' => 'Home',
+    ],
+  ]);
+  
+}
+  
  
 
 //********************  Not sure if this does anything useful  ************************
