@@ -47,13 +47,13 @@ use \Drupal\Core\TypedData\TypedDataInterface;
 /************************************************************************
 /*
 Hook Group Create ()
-  Process Action (Group, Action)
+  Process Action (Action, Group)
 
 Hook Group Update ()
-  Process Action (Group, Action)
+  Process Action (Action, Group)
 
 Hook Group Delete ()
-  Process Action (Group, Action)
+  Process Action (Action, Group)
 
 Hook GroupContent Create ()
   Process Action (GroupContent, Action)
@@ -64,7 +64,7 @@ Hook GroupContent Update ()					// Not sure this ever happens
 Hook GroupContent Delete ()
   Process Action (GroupContent, Action)
   
-Process Group Action (Group, Action)
+Process Group Action (Action, Group)
   Get Group details - Id -> Organisation Ext Id
   Get list of Organisations with that Ext Id 
   If None exist
@@ -114,141 +114,164 @@ Process GroupContent Action (GroupContent, Action)
 	
 */
 
-/************************************************************************
-/*  Hooks for Group changes 
-/************************************************************************
+//************************************************************************
+//*  Group/Organisation Processing 
+//************************************************************************
+
+//**************************  Hooks  ******************************
 
 /**
- * Implements hook_entity_insert().
+ * Implements hook_entity_type_insert().
  */
-function lalg_civi_sync_entity_insert(\Drupal\Core\Entity\EntityInterface $entity) {
-dpm('Insert: ' . $entity->getEntityTypeId());
-}
-
-
-/**
- * Implements hook_entity_update().
- */
-function lalg_civi_sync_entity_update(Drupal\Core\Entity\EntityInterface $entity) {
-dpm('Update: ' . $entity->getEntityTypeId());	
-return;
-  if ($entity->getEntityTypeId() == 'group') {
-    // Call function to check Group synched properly	  
-//	check_group_entity($entity);
-  }
+function lalg_civi_sync_group_insert(\Drupal\Core\Entity\EntityInterface $group) {
+	processGroupAction('create', $group);
 }
 
 /**
- * Implements hook_entity_delete().
+ * Implements hook_entity_type_update().
  */
- function lalg_civi_sync_entity_delete(Drupal\Core\Entity\EntityInterface $entity) {
-  dpm('Delete: ' . $entity->getEntityTypeId());	
+function lalg_civi_sync_group_update(Drupal\Core\Entity\EntityInterface $group) {
+	processGroupAction('update', $group);
 }
- 
-
-
- 
- 
-/************************************************************************
-/*  Process the changes 
-/************************************************************************ 
- 
 
 /**
- *  Checks that the linked Organisation exists, and if not creates it.
- *  Checks and corrects the Organisation's attributes.
- *  Checks and corrects the Relationships to Group members / Civi Contacts
+ * Implements hook_entity_type_delete().
  */
-function check_group_entity($group) {
-  \Drupal::service('civicrm')->initialize();		// Prepare to use CiviCRM API
+ function lalg_civi_sync_group_delete(Drupal\Core\Entity\EntityInterface $group) {
+	processGroupAction('delete', $group);
+}
+ 
+//******************************  Processing the Actions  ***************** 
+
+/*
+ * See pseudocode above
+ */
+function processGroupAction($action, $group) {
+dpm('Process Group Action: ' . $action);
+
+	//	Ignore if the Group is Private, or is Hidden or Team
+	$gType = $group->getGroupType()->get('label');
+//dpm($gType);
+	$gGroupType = $group->get('field_group_type')->getString();
+//dpm($gGroupType);
+	if ($gType != 'Public' || $gGroupType == '15' || $gGroupType == '201') {
+		return;
+	}
+	
+	\Drupal::service('civicrm')->initialize();		// Prepare to use CiviCRM API
   
-  $gid = $group->id;
-
-  // Look for corresponding Organisation
-  $orgs = civicrm_api4('Contact', 'get', [
-    'select' => [
-      'id', 
-      'organization_name',
-	  'is_deleted',
-    ],
-    'where' => [  
-      ['external_identifier', '=', $gid], 
-      ['contact_type', '=', 'Organization'],
-    ],
-  ]);  
+	$oExtId = 'CiviSync' . $group->id->value;			// Organisation External Id
 	
-  if (count($orgs) == 0) {
-	// Create a new Organisation Contact
-    createOrganisation($group);
-  }
-  else if (count($orgs) > 1) {
-	// Throw Error.  External Id must be unique   
-dpm('Throw error - duplicate Ext Id');	
-  }
-  else {
-	// Organisation already exists, so ...
-	// Check if in Trash
-	
-    // Now check Attributes
-dpm('Checking Attributes');  
-  }
-}
+	// Look for the corresponding Organisation
+	$orgs = civicrm_api4('Contact', 'get', [
+		'select' => [
+			'id', 
+		],
+		'where' => [  
+			['external_identifier', '=', $oExtId], 
+			['contact_type', '=', 'Organization'],
+		],
+	]); 	
+  
+	// Check number of results returned
+dpm('Count of Organisations: ' . count($orgs));
+	if (count($orgs) == 0) {
+		// Check if there is actually one in Trash
+		$orgsTrash = civicrm_api4('Contact', 'get', [
+			'select' => [
+				'id', 
+			],
+			'where' => [  
+				['external_identifier', '=', $oExtId], 
+				['contact_type', '=', 'Organization'],
+				['is_deleted', '=', TRUE],
+			],
+		]);	 
  
+		if (count($orgsTrash) > 0) {
+			deleteOrganisation($orgsTrash[0]['id']);
+		}	  
+		// Now definitely no existing Organisation.
+	
+		if ($action == 'create') {
+			createOrganisation($group, $oExtId);
+		}
+		else if ($action == 'update') {
+			createOrganisation($group, $oExtId);
+			updateOrganisation($group, $orgs[0]['id'], $oExtId);			// Probably don't need this since duplicates create 
+		}
+		// No action to take if 'Delete'
+	}											// End No Organisation exists	
+  
+	else if (count($orgs) == 1) {
+		if ($action == 'create') {
+			deleteOrganisation($orgs[0]['id']);	
+			createOrganisation($group, $oExtId);
+		}
+		else if ($action == 'update') {
+			updateOrganisation($group, $orgs[0]['id'], $oExtId);	
+		}
+		else if ($action == 'delete') {
+			deleteOrganisation($orgs[0]['id']);
+		}
+	}												// End of One Organisation exists
+  
+	else {									// More than one - illegal.
+		fatalError('Found illegal duplicate Organisations with External Id: ' . $oExtId); 
+	}
+}
+
  
 /**
  * Creates a new CiviCRM Organisation Contact, corresponding to the given Drupal Group Entity
  */
-function createOrganisation($group) {
+function createOrganisation($group, $oExtId) {
 dpm('Create Organisation');	
-  //Collect the parameters needed
-  $gid = $group->id->value;
-  $gTitle = $group->label->value;	
-  $gAlias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $gid);
-//************** Remove leading /
+	//Collect the parameters needed
+	$gTitle = $group->label->value;	
+	$gAlias = \Drupal::service('path_alias.manager')->getAliasByPath('/group/' . $group->id->value);
+	// Remove slashes from Alias
+	$oEmail = preg_replace("/\//", "", $gAlias);
   
-  // Create the Organisation
-  $results = civicrm_api4('Contact', 'create', [
-    'values' => [
-      'contact_type' => 'Organization', 
-      'external_identifier' => $gid, 
-      'organization_name' => $gTitle,
-    ],
-  ]);
+	// Create the Organisation
+	$results = civicrm_api4('Contact', 'create', [
+		'values' => [
+			'contact_type' => 'Organization', 
+			'external_identifier' => $oExtId, 
+			'organization_name' => $gTitle,
+		],
+	]);
 // dpm($results); 
  
-  $orgId = $results[0]['id'];
-dpm($orgId);
+	$oid = $results[0]['id'];
+dpm($oid);
 
-  // Add the Email address
-  $results = civicrm_api4('Email', 'create', [
-    'values' => [
-      'contact_id' => $orgId, 
-      'email' => $gAlias . '@lalg.org.uk', 
-      'is_primary' => TRUE, 
-      'location_type_id:name' => 'Home',
-    ],
-  ]);
+	// Add the Email address
+	$results = civicrm_api4('Email', 'create', [
+		'values' => [
+			'contact_id' => $oid, 
+			'email' => $oEmail . '@lalg.org.uk', 
+			'is_primary' => TRUE, 
+			'location_type_id:name' => 'Home',
+		],
+	]);
   
 }
   
+
+function updateOrganisation ($group, $oid, $oExtId) {
+dpm('Update Organisation');
+	
+}
  
+function deleteOrganisation($oid) {
+dpm('Delete Organisation');	
+}
 
-//********************  Not sure if this does anything useful  ************************
+function fatalError ($message) {
+  \Drupal::logger('lalg_civi_sync')->error($message);  
+  drupal_set_message('Action Abandoned. ' . $message, 'error');
+}
 
-/**
- * Alter the links for the group_operations block.
- *
- * @param array $operations
- *   A list of links to be set in an 'operations' element.
- * @param GroupInterface $group
- *   The group to alter the operations for.
- *
- * @see \Drupal\group\Plugin\Block\GroupOperationsBlock
- * @see \Drupal\Core\Render\Element\Dropbutton
- */
-// function lalg_wf_utils_group_operations_alter(&$operations, $group) {
-  // dpm($group->label());
-  // dpm($operations);
-  // dpm($group);
-// }
+
 
